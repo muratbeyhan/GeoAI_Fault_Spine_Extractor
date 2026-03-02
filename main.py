@@ -5,7 +5,7 @@ from qgis.PyQt.QtWidgets import (QAction, QDialog, QVBoxLayout, QDoubleSpinBox,
                                QSpinBox, QLabel, QPushButton, QComboBox, 
                                QMessageBox, QGridLayout)
 from qgis.core import (QgsProject, QgsVectorLayer, QgsField, QgsFields, QgsFeature, 
-                       QgsGeometry, QgsPointXY, QgsWkbTypes, QgsDistanceArea)
+                       QgsGeometry, QgsPointXY, QgsWkbTypes, QgsDistanceArea, QgsUnitTypes)
 from qgis.PyQt.QtGui import QIcon
 import processing
 import numpy as np
@@ -36,7 +36,7 @@ class SeismotectonicPlugin:
         self.dlg.setMinimumWidth(500)
         layout = QGridLayout()
 
-        # UI Elements
+        # 1. Layer Selection
         layout.addWidget(QLabel("Earthquake Point Layer:"), 0, 0)
         self.layer_combo = QComboBox()
         point_layers = [l for l in QgsProject.instance().mapLayers().values() 
@@ -45,48 +45,83 @@ class SeismotectonicPlugin:
         self.layer_combo.currentIndexChanged.connect(self.update_fields)
         layout.addWidget(self.layer_combo, 0, 1)
 
+        # 2. Attribute Field Selection
         layout.addWidget(QLabel("Magnitude Field:"), 1, 0)
         self.mag_field_combo = QComboBox(); layout.addWidget(self.mag_field_combo, 1, 1)
 
-        layout.addWidget(QLabel("Min Magnitude (Mw):"), 2, 0)
+        layout.addWidget(QLabel("Latitude Field (Y):"), 2, 0)
+        self.lat_field_combo = QComboBox()
+        layout.addWidget(self.lat_field_combo, 2, 1)
+
+        layout.addWidget(QLabel("Longitude Field (X):"), 3, 0)
+        self.lon_field_combo = QComboBox()
+        layout.addWidget(self.lon_field_combo, 3, 1)
+
+        # 3. Processing Parameters
+        layout.addWidget(QLabel("Min Magnitude (Mw):"), 4, 0)
         self.mag_spin = QDoubleSpinBox(); self.mag_spin.setDecimals(1); self.mag_spin.setSingleStep(0.1); self.mag_spin.setValue(0.0)
-        layout.addWidget(self.mag_spin, 2, 1)
+        layout.addWidget(self.mag_spin, 4, 1)
 
-        layout.addWidget(QLabel("Clustering Dist (EPS):"), 3, 0)
-        self.eps_spin = QDoubleSpinBox(); self.eps_spin.setDecimals(3); self.eps_spin.setSingleStep(0.001); self.eps_spin.setValue(0.008)
-        layout.addWidget(self.eps_spin, 3, 1)
+        # Dynamic Unit Information Label
+        self.unit_info_label = QLabel("Layer Unit: Detecting...")
+        self.unit_info_label.setStyleSheet("color: #2c3e50; font-style: italic; font-weight: bold;")
+        layout.addWidget(self.unit_info_label, 5, 0, 1, 2)
 
-        layout.addWidget(QLabel("Min Samples (EQs):"), 4, 0)
-        self.min_samples_spin = QSpinBox(); self.min_samples_spin.setRange(5, 5000); self.min_samples_spin.setValue(15)
-        layout.addWidget(self.min_samples_spin, 4, 1)
+        layout.addWidget(QLabel("Clustering Dist (EPS):"), 6, 0)
+        self.eps_spin = QDoubleSpinBox(); self.eps_spin.setDecimals(6); self.eps_spin.setRange(0.000001, 100000.0)
+        layout.addWidget(self.eps_spin, 6, 1)
 
-        layout.addWidget(QLabel("Smoothing (Sigma):"), 5, 0)
-        self.sigma_spin = QDoubleSpinBox(); self.sigma_spin.setDecimals(1); self.sigma_spin.setSingleStep(0.1); self.sigma_spin.setValue(1.0)
-        layout.addWidget(self.sigma_spin, 5, 1)
+        layout.addWidget(QLabel("Min Samples (EQs):"), 7, 0)
+        self.min_samples_spin = QSpinBox(); self.min_samples_spin.setRange(1, 5000); self.min_samples_spin.setValue(15)
+        layout.addWidget(self.min_samples_spin, 7, 1)
+
+        layout.addWidget(QLabel("Smoothing (Sigma):"), 8, 0)
+        self.sigma_spin = QDoubleSpinBox(); self.sigma_spin.setDecimals(3); self.sigma_spin.setSingleStep(0.01); self.sigma_spin.setValue(0.2)
+        layout.addWidget(self.sigma_spin, 8, 1)
 
         self.btn = QPushButton("Extract Spines with Analytics")
         self.btn.setStyleSheet("background-color: #1e8449; color: white; font-weight: bold; padding: 12px;")
         self.btn.clicked.connect(self.process)
-        layout.addWidget(self.btn, 6, 0, 1, 2)
+        layout.addWidget(self.btn, 9, 0, 1, 2)
 
         self.dlg.setLayout(layout)
         self.update_fields(); self.dlg.show()
 
     def update_fields(self):
         self.mag_field_combo.clear()
+        self.lat_field_combo.clear()
+        self.lon_field_combo.clear()
+        
         layer_id = self.layer_combo.currentData()
         if layer_id:
             layer = QgsProject.instance().mapLayer(layer_id)
             if layer:
+                units = layer.crs().mapUnits()
+                if units == QgsUnitTypes.DistanceDegrees:
+                    self.unit_info_label.setText("Unit: Degrees (WGS84) | Suggest EPS: 0.008-0.015")
+                    self.eps_spin.setDecimals(4)
+                    self.eps_spin.setSingleStep(0.0001)
+                    self.eps_spin.setValue(0.008)
+                else:
+                    self.unit_info_label.setText("Unit: Meters/Metric | Suggest EPS: 500-2000")
+                    self.eps_spin.setDecimals(1)
+                    self.eps_spin.setSingleStep(100.0)
+                    self.eps_spin.setValue(1000.0)
+
                 fields = [f.name() for f in layer.fields()]
                 self.mag_field_combo.addItems(fields)
+                self.lat_field_combo.addItems(fields)
+                self.lon_field_combo.addItems(fields)
+
                 for f in fields:
-                    if f.lower() in ['mag', 'magnitude', 'mw']: self.mag_field_combo.setCurrentText(f)
+                    f_lower = f.lower()
+                    if f_lower in ['mag', 'magnitude', 'mw']: self.mag_field_combo.setCurrentText(f)
+                    if f_lower in ['lat', 'latitude', 'enlem', 'y']: self.lat_field_combo.setCurrentText(f)
+                    if f_lower in ['lon', 'longitude', 'boylam', 'x']: self.lon_field_combo.setCurrentText(f)
 
     def calculate_strike(self, vector):
-        # Azimuth calculation from PCA vector
         angle = math.degrees(math.atan2(vector[0], vector[1]))
-        strike = (angle + 360) % 180 # Geological strike is usually 0-180
+        strike = (angle + 360) % 180 
         return round(strike, 2)
 
     def process(self):
@@ -94,27 +129,35 @@ class SeismotectonicPlugin:
             extent = self.iface.mapCanvas().extent()
             layer_id = self.layer_combo.currentData()
             input_layer = QgsProject.instance().mapLayer(layer_id)
-            mag_field = self.mag_field_combo.currentText()
-            mag_limit = self.mag_spin.value()
-            eps_val = self.eps_spin.value()
-            min_pts = self.min_samples_spin.value()
-            sigma_val = self.sigma_spin.value()
+            if not input_layer: return
             
-            # Distance Calculator (WGS84)
+            mag_field = self.mag_field_combo.currentText()
+            mag_limit = float(self.mag_spin.value())
+            eps_val = float(self.eps_spin.value())
+            min_pts = int(self.min_samples_spin.value())
+            sigma_val = float(self.sigma_spin.value())
+            
             d = QgsDistanceArea()
-            d.setEllipsoid('WGS84')
+            d.setSourceCrs(input_layer.crs(), QgsProject.instance().transformContext())
+            d.setEllipsoid(QgsProject.instance().ellipsoid())
 
-            # Standard Processing
             cropped = processing.run("native:extractbyextent", {'INPUT': input_layer, 'EXTENT': extent, 'OUTPUT': 'memory:'})['OUTPUT']
-            filtered = processing.run("native:extractbyexpression", {'INPUT': cropped, 'EXPRESSION': f"\"{mag_field}\" >= {self.mag_spin.value()}", 'OUTPUT': 'memory:'})['OUTPUT']
-            dbscan = processing.run("native:dbscanclustering", {'INPUT': filtered, 'EPS': self.eps_spin.value(), 'MIN_CLUSTER_SIZE': self.min_samples_spin.value(), 'DBSCAN_HANGEL_NOISE': True, 'OUTPUT': 'memory:'})['OUTPUT']
+            filtered = processing.run("native:extractbyexpression", {'INPUT': cropped, 'EXPRESSION': f"\"{mag_field}\" >= {mag_limit}", 'OUTPUT': 'memory:'})['OUTPUT']
+            
+            dbscan_params = {
+                'INPUT': filtered,
+                'EPS': eps_val,
+                'MIN_CLUSTER_SIZE': min_pts,
+                'DBSCAN_HANDLE_NOISE': True,
+                'OUTPUT': 'memory:'
+            }
+            dbscan = processing.run("native:dbscanclustering", dbscan_params)['OUTPUT']
 
-            # Output Layer with Rich Metadata
-            layer_title = "Spines_M{:.1f}_EPS{:.3f}_S{:.1f}_MS{:03d}".format(mag_limit, eps_val, sigma_val,min_pts)
+            # Updated Layer Title with high precision for Smoothing (S)
+            layer_title = "Spines_M{:.1f}_EPS{:.4f}_S{:.3f}_MS{:03d}".format(mag_limit, eps_val, sigma_val, min_pts)
             output_layer = QgsVectorLayer(f"LineString?crs={input_layer.crs().authid()}", layer_title, "memory")
             prov = output_layer.dataProvider()
             
-            # Rich Attributes
             fields = QgsFields()
             fields.append(QgsField("ClusterID", QVariant.Int))
             fields.append(QgsField("EQ_Count", QVariant.Int))
@@ -129,39 +172,39 @@ class SeismotectonicPlugin:
             for f in dbscan.getFeatures():
                 cid = f['CLUSTER_ID']
                 if cid is None or cid < 0: continue
-                if cid not in clusters_pts: 
+                if cid not in clusters_pts:
                     clusters_pts[cid] = []
                     clusters_mags[cid] = []
                 p = f.geometry().asPoint()
                 clusters_pts[cid].append([p.x(), p.y()])
                 clusters_mags[cid].append(f[mag_field])
 
+            created_count = 0 
             for cid, pts_list in clusters_pts.items():
                 pts = np.array(pts_list)
-                # Analytics
-                avg_mw = round(float(np.mean(clusters_mags[cid])), 2)
+                if len(pts) < min_pts: continue
                 
-                # PCA for Strike
+                avg_mw = round(float(np.mean(clusters_mags[cid])), 2)
                 center = pts.mean(axis=0); cov = np.cov(pts.T)
                 vals, vecs = np.linalg.eig(cov); idx = np.argmax(vals)
                 main_vec = vecs[:, idx]
                 strike_val = self.calculate_strike(main_vec)
                 
-                # Spine Generation (Simplified for brevity)
                 mag_dist = np.sqrt(vals[idx]) * 2.5
                 raw_points = []
                 for s in np.linspace(-mag_dist, mag_dist, 20):
                     anchor_p = center + main_vec * s
                     dists = np.linalg.norm(pts - anchor_p, axis=1)
-                    local_pts = pts[dists < (self.eps_spin.value() * 1.5)]
-                    if len(local_pts) > 2: raw_points.append(anchor_p * 0.2 + local_pts.mean(axis=0) * 0.8)
-                    else: raw_points.append(anchor_p)
+                    local_pts = pts[dists < (eps_val * 1.5)]
+                    if len(local_pts) > 2: 
+                        raw_points.append(anchor_p * 0.2 + local_pts.mean(axis=0) * 0.8)
+                    else: 
+                        raw_points.append(anchor_p)
 
                 if len(raw_points) > 5:
                     smoothed = []
-                    win = int(self.sigma_spin.value())
                     for i in range(len(raw_points)):
-                        avg_p = np.mean(raw_points[max(0, i-win):min(len(raw_points), i+win+1)], axis=0)
+                        avg_p = np.mean(raw_points[max(0, i-2):min(len(raw_points), i+3)], axis=0)
                         smoothed.append(QgsPointXY(float(avg_p[0]), float(avg_p[1])))
                     
                     geom = QgsGeometry.fromPolylineXY(smoothed)
@@ -171,9 +214,14 @@ class SeismotectonicPlugin:
                     feat.setGeometry(geom)
                     feat.setAttributes([cid, len(pts), avg_mw, strike_val, length_km])
                     prov.addFeatures([feat])
+                    created_count += 1 
 
             QgsProject.instance().addMapLayer(output_layer)
-            QMessageBox.information(None, "Success", f"Extracted {len(clusters_pts)} segments with structural analytics.")
+            QMessageBox.information(None, "Success", 
+                f"Extraction Completed!\n\n"
+                f"Total Clusters Found: {len(clusters_pts)}\n"
+                f"Spines Created (After Filters): {created_count}\n\n"
+                f"Layer '{layer_title}' added to map.")
 
         except Exception as e:
-            QMessageBox.critical(None, "Error", str(e))
+            QMessageBox.critical(None, "Error", f"Error: {str(e)}")

@@ -9,5 +9,5 @@ about=Developed by Murat BEYHAN (Geophysical Engineer, M.Sc., Seismologist). Aca
 category=Vector
 tags= sismoloji, jeofizik, fay, deprem, seismology, geophysic, fault, earthquake, Türkiye, python
 repository=https://github.com/muratbeyhan/GeoAI_Fault_Spine_Extractor
-homepage=https://github.com/muratbeyhan/GeoAI_Fault_Spine_Extractor 
+homepage=https://github.com/muratbeyhan/GeoAI_Fault_Spine_Extractor
 tracker=https://github.com/muratbeyhan/GeoAI_Fault_Spine_Extractor/issues
