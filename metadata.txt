@@ -1,13 +1,14 @@
 [general]
 name=GeoAI Fault Spine Extractor
 qgisMinimumVersion=3.0
-description=Professional tool for extracting fault spines using cluster-based PCA and adaptive smoothing.
-version=1.0
-author=Murat BEYHAN 
+description=Professional tool for extracting fault spines from point-based earthquake catalogs. v1.1 adds GeoPackage disk storage, field auto-detection, and optimized smoothing (Sigma 0.001-20.0).
+version=1.1
+author=Murat BEYHAN
 email=muratbeyhan28@yahoo.com
-about=Developed by Murat BEYHAN (Geophysical Engineer, M.Sc., Seismologist). Academic Background: Ankara University (Geophysical Engineering) & IISEE/BRI Tsukuba, Japan (Seismology). This plugin automates the structural interpretation of earthquake catalogs.
+about=This plugin automates the structural interpretation of earthquake catalogs by transforming raw point seismicity data into linear fault spines using DBSCAN clustering and PCA analysis. Developed by Murat BEYHAN (Geophysical Engineer, M.Sc., Seismologist). Academic Background: Ankara University (Geophysical Engineering) & IISEE/BRI Tsukuba, Japan (Seismology).
 category=Vector
-tags= sismoloji, jeofizik, fay, deprem, seismology, geophysic, fault, earthquake, Türkiye, python
+tags=sismoloji, jeofizik, fay, deprem, seismology, geophysics, fault, earthquake, Türkiye, Japan, python, PCA, DBSCAN, point-seismicity
 repository=https://github.com/muratbeyhan/GeoAI_Fault_Spine_Extractor
 homepage=https://github.com/muratbeyhan/GeoAI_Fault_Spine_Extractor
 tracker=https://github.com/muratbeyhan/GeoAI_Fault_Spine_Extractor/issues
+icon=icon.png
